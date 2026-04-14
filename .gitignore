@@ -1,0 +1,68 @@
+# -----------------------------
+# OS / Editor files
+# -----------------------------
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+
+# -----------------------------
+# Logs
+# -----------------------------
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# -----------------------------
+# Python / FastAPI (backend)
+# -----------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+
+.venv/
+venv/
+env/
+ENV/
+
+backend/.env
+backend/.env.*
+!backend/.env.example
+
+# Local SQLite files used in development
+backend/*.db
+backend/*.sqlite3
+
+# -----------------------------
+# Node / Vite (frontend)
+# -----------------------------
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+*.tsbuildinfo
+
+frontend/.env
+frontend/.env.*
+!frontend/.env.example
+
+# -----------------------------
+# Root environment files
+# -----------------------------
+.env
+.env.*
+!.env.example
+
+# -----------------------------
+# Deployment and local tooling
+# -----------------------------
+.heroku/
