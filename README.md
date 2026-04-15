@@ -80,6 +80,13 @@ DATABASE_URL=sqlite:///./ricks_energy.db
 FRONTEND_ORIGIN=http://localhost:5173
 ```
 
+Para ambiente MySQL hospedado (ex.: Hostinger), use o template [backend/.env.template](backend/.env.template):
+
+```powershell
+cd backend
+Copy-Item .env.template .env
+```
+
 Frontend ([frontend/.env.example](frontend/.env.example)):
 
 ```env

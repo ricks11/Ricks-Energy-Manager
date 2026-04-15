@@ -38,14 +38,19 @@ ENV/
 backend/.env
 backend/.env.*
 !backend/.env.example
+!backend/.env.template
 
 # Local SQLite files used in development
+/ricks_energy.db
+/*.db
+/*.sqlite3
 backend/*.db
 backend/*.sqlite3
 
 # -----------------------------
 # Node / Vite (frontend)
 # -----------------------------
+node_modules/
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
@@ -58,9 +63,9 @@ frontend/.env.*
 # -----------------------------
 # Root environment files
 # -----------------------------
-.env
-.env.*
-!.env.example
+/.env
+/.env.*
+!/.env.example
 
 # -----------------------------
 # Deployment and local tooling
