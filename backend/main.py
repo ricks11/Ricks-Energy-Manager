@@ -1,6 +1,8 @@
+import csv
 from datetime import date, datetime, time, timedelta, timezone
+from io import StringIO
 
-from fastapi import Depends, FastAPI, HTTPException, Query, status
+from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
@@ -352,6 +354,54 @@ def get_history(
     )
 
 
+@app.get("/history/export.csv", tags=["history"])
+def export_history_csv(
+    limit: int = Query(default=500, ge=1, le=5000),
+    db: Session = Depends(get_db),
+) -> Response:
+    events = (
+        db.query(EnergyEvent)
+        .order_by(desc(EnergyEvent.occurred_at))
+        .limit(limit)
+        .all()
+    )
+    events.reverse()
+
+    stream = StringIO()
+    writer = csv.writer(stream)
+    writer.writerow(
+        [
+            "id",
+            "occurred_at",
+            "event_type",
+            "event_label",
+            "note",
+            "energy_kwh",
+            "amount_eur",
+        ]
+    )
+
+    for event in events:
+        writer.writerow(
+            [
+                event.id,
+                event.occurred_at.isoformat(),
+                event.event_type,
+                format_event_label(event.event_type),
+                event.note or "",
+                "" if event.energy_kwh is None else round(event.energy_kwh, 2),
+                "" if event.amount_eur is None else round(event.amount_eur, 2),
+            ]
+        )
+
+    csv_content = stream.getvalue()
+    headers = {
+        "Content-Disposition": 'attachment; filename="energy-history.csv"',
+    }
+
+    return Response(content=csv_content, media_type="text/csv; charset=utf-8", headers=headers)
+
+
 @app.post(
     "/top-ups",
     response_model=TopUpOut,
@@ -403,8 +453,25 @@ def create_meter_reading(
     payload: MeterReadingCreate,
     db: Session = Depends(get_db),
 ) -> MeterReadingOut:
+    wallet = require_wallet(db)
     reading = DailyReading(meter_kwh=payload.meter_kwh, recorded_at=utc_now())
     db.add(reading)
+    db.flush()
+
+    recent_readings = (
+        db.query(DailyReading)
+        .order_by(desc(DailyReading.recorded_at))
+        .limit(7)
+        .all()
+    )
+    if recent_readings:
+        wallet.average_daily_consumption = round(
+            sum(item.meter_kwh for item in recent_readings) / len(recent_readings),
+            2,
+        )
+
+    wallet.updated_at = utc_now()
+
     db.add(
         EnergyEvent(
             event_type="meter_reading",

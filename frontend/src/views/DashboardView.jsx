@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { getEnergySummary } from "../api/client";
+import { createMeterReading, getEnergySummary } from "../api/client";
 
 function DashboardView() {
   const [summary, setSummary] = useState({
@@ -12,25 +12,30 @@ function DashboardView() {
     lastUpdated: null,
   });
   const [summaryError, setSummaryError] = useState("");
+  const [meterReadingValue, setMeterReadingValue] = useState("");
+  const [isMeterReadingSubmitting, setIsMeterReadingSubmitting] = useState(false);
+  const [meterReadingFeedback, setMeterReadingFeedback] = useState({ type: "", message: "" });
+
+  const refreshSummary = useCallback(async () => {
+    const payload = await getEnergySummary();
+
+    setSummary({
+      balanceKwh: payload.balance_kwh,
+      estimatedDays: payload.estimated_days_remaining,
+      averageDailyConsumption: payload.average_daily_consumption,
+      meterId: payload.meter_id,
+      serviceStatus: payload.service_status,
+      lastUpdated: payload.last_updated,
+    });
+    setSummaryError("");
+  }, []);
 
   useEffect(() => {
     let isCancelled = false;
 
     async function loadSummary() {
       try {
-        const payload = await getEnergySummary();
-
-        if (!isCancelled) {
-          setSummary({
-            balanceKwh: payload.balance_kwh,
-            estimatedDays: payload.estimated_days_remaining,
-            averageDailyConsumption: payload.average_daily_consumption,
-            meterId: payload.meter_id,
-            serviceStatus: payload.service_status,
-            lastUpdated: payload.last_updated,
-          });
-          setSummaryError("");
-        }
+        await refreshSummary();
       } catch {
         if (!isCancelled) {
           setSummaryError("Sem ligacao com a API. Exibindo dados locais.");
@@ -43,7 +48,41 @@ function DashboardView() {
     return () => {
       isCancelled = true;
     };
-  }, []);
+  }, [refreshSummary]);
+
+  async function handleMeterReadingSubmit(event) {
+    event.preventDefault();
+
+    const numericValue = Number(meterReadingValue);
+    if (!Number.isFinite(numericValue) || numericValue < 0) {
+      setMeterReadingFeedback({
+        type: "error",
+        message: "Informe uma leitura valida maior ou igual a 0.",
+      });
+      return;
+    }
+
+    setIsMeterReadingSubmitting(true);
+    setMeterReadingFeedback({ type: "", message: "" });
+
+    try {
+      await createMeterReading({ meter_kwh: numericValue });
+      await refreshSummary();
+
+      setMeterReadingValue("");
+      setMeterReadingFeedback({
+        type: "success",
+        message: "Leitura registada com sucesso.",
+      });
+    } catch (error) {
+      setMeterReadingFeedback({
+        type: "error",
+        message: error instanceof Error ? error.message : "Nao foi possivel registar a leitura.",
+      });
+    } finally {
+      setIsMeterReadingSubmitting(false);
+    }
+  }
 
   const formattedBalance = useMemo(
     () =>
@@ -224,21 +263,35 @@ function DashboardView() {
                 <h2 className="text-xl font-bold font-headline">Nova Leitura do Contador</h2>
               </div>
 
-              <div className="space-y-4">
+              <form className="space-y-4" onSubmit={handleMeterReadingSubmit}>
                 <div>
                   <label className="mb-2 block text-[10px] uppercase tracking-wider text-on-surface-variant font-label">Leitura Atual (kWh)</label>
                   <input
                     className="w-full rounded-xl border-none bg-surface-container-lowest px-6 py-4 text-lg text-on-surface transition-all font-headline focus:bg-surface-container-high focus:ring-2 focus:ring-primary/30"
+                    min="0"
                     placeholder="000000.00"
+                    step="0.01"
                     type="number"
+                    value={meterReadingValue}
+                    onChange={(event) => setMeterReadingValue(event.target.value)}
                   />
                 </div>
 
-                <button className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-xl bg-primary py-4 font-bold text-on-primary shadow-[0_10px_20px_rgba(105,246,184,0.15)] transition-transform active:scale-95">
-                  <span>Registar Agora</span>
-                  <span className="material-symbols-outlined text-sm text-on-primary transition-transform group-hover:translate-x-1">arrow_forward</span>
+                <button
+                  className="group relative flex w-full items-center justify-center gap-3 overflow-hidden rounded-xl bg-primary py-4 font-bold text-on-primary shadow-[0_10px_20px_rgba(105,246,184,0.15)] transition-transform disabled:cursor-not-allowed disabled:opacity-60 active:scale-95"
+                  disabled={isMeterReadingSubmitting}
+                  type="submit"
+                >
+                  <span>{isMeterReadingSubmitting ? "A registar..." : "Registar Agora"}</span>
+                  <span className="material-symbols-outlined text-sm text-on-primary transition-transform group-hover:translate-x-1">
+                    {isMeterReadingSubmitting ? "hourglass_top" : "arrow_forward"}
+                  </span>
                 </button>
-              </div>
+
+                {meterReadingFeedback.message ? (
+                  <p className={`text-xs ${meterReadingFeedback.type === "error" ? "text-tertiary" : "text-primary"}`}>{meterReadingFeedback.message}</p>
+                ) : null}
+              </form>
             </div>
 
             <div className="rounded-xl border border-outline-variant/10 bg-surface-container p-6">

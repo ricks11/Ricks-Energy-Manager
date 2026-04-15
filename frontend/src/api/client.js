@@ -33,8 +33,34 @@ export function getHistory(limit = 20) {
   return request(`/history?limit=${limit}`);
 }
 
+export async function downloadHistoryCsv(limit = 500) {
+  const response = await fetch(`${API_BASE_URL}/history/export.csv?limit=${limit}`);
+
+  if (!response.ok) {
+    let detail = "Unexpected request error.";
+
+    try {
+      const payload = await response.json();
+      detail = payload.detail ?? detail;
+    } catch {
+      detail = `HTTP ${response.status}`;
+    }
+
+    throw new Error(detail);
+  }
+
+  return response.blob();
+}
+
 export function createTopUp(payload) {
   return request("/top-ups", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export function createMeterReading(payload) {
+  return request("/readings", {
     method: "POST",
     body: JSON.stringify(payload),
   });

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { getHistory } from "../api/client";
+import { downloadHistoryCsv, getHistory } from "../api/client";
 
 const defaultChart = [
   { label: "Mon", kwh: 12.4 },
@@ -76,6 +76,8 @@ function HistoryView() {
     logs: [],
   });
   const [loadError, setLoadError] = useState("");
+  const [isDownloadingCsv, setIsDownloadingCsv] = useState(false);
+  const [csvError, setCsvError] = useState("");
 
   useEffect(() => {
     let isCancelled = false;
@@ -119,6 +121,27 @@ function HistoryView() {
       last: last.toFixed(1),
     };
   }, [historyData.chart]);
+
+  async function handleDownloadCsv() {
+    setIsDownloadingCsv(true);
+    setCsvError("");
+
+    try {
+      const blob = await downloadHistoryCsv(2000);
+      const downloadUrl = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = downloadUrl;
+      link.download = `energy-history-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(downloadUrl);
+    } catch (error) {
+      setCsvError(error instanceof Error ? error.message : "Falha ao descarregar CSV.");
+    } finally {
+      setIsDownloadingCsv(false);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-surface font-body text-on-surface antialiased">
@@ -340,8 +363,17 @@ function HistoryView() {
             <div className="overflow-hidden rounded-[1.5rem] bg-surface-container md:col-span-2">
               <div className="flex items-center justify-between px-8 py-6">
                 <h3 className="text-lg font-headline font-bold">Detailed Logs</h3>
-                <button className="text-xs font-label uppercase tracking-widest text-primary hover:underline">Download CSV</button>
+                <button
+                  className="text-xs font-label uppercase tracking-widest text-primary transition-opacity hover:underline disabled:cursor-not-allowed disabled:opacity-60"
+                  disabled={isDownloadingCsv}
+                  onClick={handleDownloadCsv}
+                  type="button"
+                >
+                  {isDownloadingCsv ? "Downloading..." : "Download CSV"}
+                </button>
               </div>
+
+              {csvError ? <p className="px-8 pb-2 text-xs text-tertiary">{csvError}</p> : null}
 
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
