@@ -1,7 +1,9 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
 :root {
-  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-  color: #12343b;
-  background: linear-gradient(145deg, #f0f6f8 0%, #d9e8ee 100%);
+  color-scheme: dark;
 }
 
 * {
@@ -11,85 +13,67 @@
 body {
   margin: 0;
   min-height: 100vh;
+  font-family: "Inter", sans-serif;
+  background-color: #060e20;
+  color: #dee5ff;
 }
 
-.app {
-  min-height: 100vh;
-  display: grid;
-  place-items: center;
-  padding: 1.5rem;
+h1,
+h2,
+h3 {
+  font-family: "Manrope", sans-serif;
 }
 
-.card {
-  width: min(680px, 100%);
-  background: #ffffff;
-  border-radius: 16px;
-  padding: 2rem;
-  box-shadow: 0 18px 45px rgba(18, 52, 59, 0.18);
+.material-symbols-outlined {
+  font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
 }
 
-.status-grid {
-  margin-top: 1.25rem;
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+.chart-tooltip {
+  opacity: 0;
+  transition: opacity 0.2s ease;
 }
 
-.status-grid h2 {
+.chart-point:hover + .chart-tooltip {
+  opacity: 1;
+}
+
+.kinetic-glow {
+  box-shadow: 0 0 20px rgba(105, 246, 184, 0.2);
+}
+
+.kinetic-gradient {
+  background: linear-gradient(135deg, #69f6b8 0%, #06b77f 100%);
+}
+
+.text-glow {
+  text-shadow: 0 0 15px rgba(105, 246, 184, 0.4);
+}
+
+.glass-panel {
+  background: rgba(25, 37, 64, 0.4);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+}
+
+input::-webkit-outer-spin-button,
+input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
   margin: 0;
-  color: #1f6f78;
-  font-size: 0.84rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
-.status-grid p {
-  margin: 0.35rem 0 0;
+input[type="number"] {
+  -moz-appearance: textfield;
 }
 
-.mono {
-  font-family: Consolas, Monaco, "Courier New", monospace;
-  font-size: 0.95rem;
+::-webkit-scrollbar {
+  width: 4px;
 }
 
-.status-pill {
-  display: inline-block;
-  border-radius: 999px;
-  padding: 0.3rem 0.75rem;
-  font-weight: 700;
+::-webkit-scrollbar-track {
+  background: #060e20;
 }
 
-.status-ok {
-  background: #dbf4de;
-  color: #0a6621;
-}
-
-.status-offline {
-  background: #fde2e2;
-  color: #9b1f1f;
-}
-
-.status-checking {
-  background: #e8eef7;
-  color: #22487a;
-}
-
-.eyebrow {
-  margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: #1f6f78;
-  font-weight: 700;
-  font-size: 0.82rem;
-}
-
-h1 {
-  margin: 0.7rem 0 0;
-  font-size: clamp(1.5rem, 3vw, 2rem);
-  line-height: 1.2;
-}
-
-p {
-  margin: 1rem 0 0;
-  line-height: 1.6;
+::-webkit-scrollbar-thumb {
+  background: #192540;
+  border-radius: 10px;
 }
