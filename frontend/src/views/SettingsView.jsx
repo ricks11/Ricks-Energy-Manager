@@ -1,18 +1,125 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { getPreferences, getProfile, updatePreferences, updateProfile as updateProfileRequest } from "../api/client";
 
 function SettingsView() {
   const [profile, setProfile] = useState({
     fullName: "Alexander Thorne",
     email: "a.thorne@kinetic.io",
     phone: "+1 (555) 0482-990",
+    memberTier: "Elite Member",
+    memberCode: "4829-X-2024",
+    meterId: "4829-X",
+    avatarUrl:
+      "https://lh3.googleusercontent.com/aida-public/AB6AXuAX2i4wMD24KXjbnQZPWsW0OMhyHTXMQ4IjNy8mfzinYjgsvdsojetVDD37ka4XSX9p7sr2_URp6dA6rnBlzT4ohJbiatUEvTWMdQsXG0mqfr7cAqfT_gUKrq8I4Y7yaeDYt6vaxcbipXbhRzpqUkizDo5wSNtUP_vrVGnX6FKVlRPgv0M_G7gEu4tNcTqS1KXav7U-z8vuPDvRMVKQjGUwXV4JlWu9fSL4xBU1tZRdH0ooBAtPzKvwvQpbNyk4zcDVElpYorUy-EhX",
   });
   const [alertThreshold, setAlertThreshold] = useState(2);
   const [pushEnabled, setPushEnabled] = useState(true);
   const [darkModeEnabled, setDarkModeEnabled] = useState(true);
+  const [language, setLanguage] = useState("English (US)");
+  const [profileMessage, setProfileMessage] = useState("");
+  const [preferencesMessage, setPreferencesMessage] = useState("");
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
 
-  function updateProfile(field, value) {
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadSettings() {
+      try {
+        const [profilePayload, preferencesPayload] = await Promise.all([getProfile(), getPreferences()]);
+
+        if (!isCancelled) {
+          setProfile((current) => ({
+            ...current,
+            fullName: profilePayload.full_name,
+            email: profilePayload.email,
+            phone: profilePayload.phone,
+            memberTier: profilePayload.member_tier,
+            memberCode: profilePayload.member_code,
+            meterId: profilePayload.meter_id,
+            avatarUrl: profilePayload.avatar_url,
+          }));
+
+          setAlertThreshold(preferencesPayload.alert_threshold_days);
+          setPushEnabled(preferencesPayload.push_notifications);
+          setDarkModeEnabled(preferencesPayload.dark_mode);
+          setLanguage(preferencesPayload.language);
+        }
+      } catch {
+        if (!isCancelled) {
+          setPreferencesMessage("Falha ao carregar configuracoes da API. Exibindo dados locais.");
+        }
+      }
+    }
+
+    loadSettings();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  function updateProfileField(field, value) {
     setProfile((current) => ({ ...current, [field]: value }));
+  }
+
+  async function handleSaveProfile() {
+    setIsSavingProfile(true);
+    setProfileMessage("");
+
+    try {
+      const payload = await updateProfileRequest({
+        full_name: profile.fullName,
+        email: profile.email,
+        phone: profile.phone,
+      });
+
+      setProfile((current) => ({
+        ...current,
+        fullName: payload.full_name,
+        email: payload.email,
+        phone: payload.phone,
+        memberTier: payload.member_tier,
+        memberCode: payload.member_code,
+        meterId: payload.meter_id,
+        avatarUrl: payload.avatar_url,
+      }));
+      setProfileMessage("Perfil atualizado com sucesso.");
+    } catch (error) {
+      setProfileMessage(error instanceof Error ? error.message : "Falha ao atualizar perfil.");
+    } finally {
+      setIsSavingProfile(false);
+    }
+  }
+
+  async function persistPreferences(payload) {
+    try {
+      const response = await updatePreferences(payload);
+      setAlertThreshold(response.alert_threshold_days);
+      setPushEnabled(response.push_notifications);
+      setDarkModeEnabled(response.dark_mode);
+      setLanguage(response.language);
+      setPreferencesMessage("Preferencias salvas.");
+    } catch (error) {
+      setPreferencesMessage(error instanceof Error ? error.message : "Falha ao salvar preferencias.");
+    }
+  }
+
+  function handleAlertThresholdChange(nextValue) {
+    setAlertThreshold(nextValue);
+    persistPreferences({ alert_threshold_days: nextValue });
+  }
+
+  function togglePushNotifications() {
+    const nextValue = !pushEnabled;
+    setPushEnabled(nextValue);
+    persistPreferences({ push_notifications: nextValue });
+  }
+
+  function toggleDarkMode() {
+    const nextValue = !darkModeEnabled;
+    setDarkModeEnabled(nextValue);
+    persistPreferences({ dark_mode: nextValue });
   }
 
   return (
@@ -31,7 +138,7 @@ function SettingsView() {
             <img
               alt="User profile photo"
               className="h-full w-full object-cover"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuAX2i4wMD24KXjbnQZPWsW0OMhyHTXMQ4IjNy8mfzinYjgsvdsojetVDD37ka4XSX9p7sr2_URp6dA6rnBlzT4ohJbiatUEvTWMdQsXG0mqfr7cAqfT_gUKrq8I4Y7yaeDYt6vaxcbipXbhRzpqUkizDo5wSNtUP_vrVGnX6FKVlRPgv0M_G7gEu4tNcTqS1KXav7U-z8vuPDvRMVKQjGUwXV4JlWu9fSL4xBU1tZRdH0ooBAtPzKvwvQpbNyk4zcDVElpYorUy-EhX"
+              src={profile.avatarUrl}
             />
           </div>
         </div>
@@ -41,7 +148,7 @@ function SettingsView() {
         <aside className="sticky top-16 hidden h-screen w-72 flex-col bg-[#091328] px-4 py-8 md:flex">
           <div className="mb-8 px-4">
             <h2 className="font-headline text-2xl font-black text-[#69f6b8]">Energy Command</h2>
-            <p className="text-[10px] font-label uppercase tracking-wide text-[#dee5ff]/50">Meter ID: 4829-X</p>
+            <p className="text-[10px] font-label uppercase tracking-wide text-[#dee5ff]/50">Meter ID: {profile.meterId}</p>
           </div>
 
           <nav className="flex-1 space-y-2">
@@ -89,7 +196,7 @@ function SettingsView() {
                   <img
                     alt="User avatar"
                     className="h-full w-full object-cover"
-                    src="https://lh3.googleusercontent.com/aida-public/AB6AXuCbQoVtR7CTav6FhClfSZf1bqvLCvUcfRBvOO_dn7UYxQPUy87AamZxLkzBVRlWy880LKTN4CrMND69zaDIdgc1VuiHGANb_w-NKKX7lI8JsTojQJC2-Kcn64AfCB10WY64csYadkxlQmC-H1im3A_jk2SjB7WMGj45L0aBfWgBPk6GRE5N5JRDnu1g_SeMwCyBnHR4OLuA_XcKUphZHDRyL5ktEJ9A4hI3MCcsaE3CXCFuuXCFRhbv7N1GjR4Xf57-7-jaEc9Heqmp"
+                    src={profile.avatarUrl}
                   />
                 </div>
 
@@ -99,13 +206,13 @@ function SettingsView() {
               </div>
 
               <div className="flex-1 text-center md:text-left">
-                <p className="mb-1 text-xs font-bold font-label uppercase tracking-widest text-primary">Elite Member</p>
+                <p className="mb-1 text-xs font-bold font-label uppercase tracking-widest text-primary">{profile.memberTier}</p>
                 <h1 className="mb-2 font-headline text-4xl font-black text-on-surface md:text-5xl">{profile.fullName}</h1>
 
                 <div className="flex items-center justify-center gap-4 md:justify-start">
                   <div className="flex items-center gap-2 rounded-full bg-surface-container px-3 py-1.5">
                     <span className="material-symbols-outlined text-sm text-primary">electric_bolt</span>
-                    <span className="text-xs font-label uppercase tracking-tighter text-on-surface-variant">ID: 4829-X-2024</span>
+                    <span className="text-xs font-label uppercase tracking-tighter text-on-surface-variant">ID: {profile.memberCode}</span>
                   </div>
                 </div>
               </div>
@@ -133,7 +240,7 @@ function SettingsView() {
                     <input
                       className="w-full rounded-2xl border border-outline-variant/10 bg-surface-container-lowest px-5 py-4 text-on-surface transition-all focus:ring-2 focus:ring-primary/30"
                       id="fullName"
-                      onChange={(event) => updateProfile("fullName", event.target.value)}
+                      onChange={(event) => updateProfileField("fullName", event.target.value)}
                       type="text"
                       value={profile.fullName}
                     />
@@ -148,7 +255,7 @@ function SettingsView() {
                     <input
                       className="w-full rounded-2xl border border-outline-variant/10 bg-surface-container-lowest px-5 py-4 text-on-surface transition-all focus:ring-2 focus:ring-primary/30"
                       id="emailAddress"
-                      onChange={(event) => updateProfile("email", event.target.value)}
+                      onChange={(event) => updateProfileField("email", event.target.value)}
                       type="email"
                       value={profile.email}
                     />
@@ -161,7 +268,7 @@ function SettingsView() {
                     <input
                       className="w-full rounded-2xl border border-outline-variant/10 bg-surface-container-lowest px-5 py-4 text-on-surface transition-all focus:ring-2 focus:ring-primary/30"
                       id="phoneNumber"
-                      onChange={(event) => updateProfile("phone", event.target.value)}
+                      onChange={(event) => updateProfileField("phone", event.target.value)}
                       type="tel"
                       value={profile.phone}
                     />
@@ -170,10 +277,17 @@ function SettingsView() {
               </div>
 
               <div className="mt-8 border-t border-outline-variant/10 pt-8">
-                <button className="group flex w-full items-center justify-center gap-3 rounded-2xl bg-primary px-10 py-4 font-black text-on-primary transition-all hover:brightness-110 active:scale-95 md:w-auto" type="button">
-                  <span>Update Profile</span>
+                <button
+                  className="group flex w-full items-center justify-center gap-3 rounded-2xl bg-primary px-10 py-4 font-black text-on-primary transition-all hover:brightness-110 active:scale-95 disabled:cursor-not-allowed disabled:opacity-70 md:w-auto"
+                  disabled={isSavingProfile}
+                  onClick={handleSaveProfile}
+                  type="button"
+                >
+                  <span>{isSavingProfile ? "Saving..." : "Update Profile"}</span>
                   <span className="material-symbols-outlined text-sm transition-transform group-hover:translate-x-1">arrow_forward</span>
                 </button>
+
+                {profileMessage ? <p className="mt-3 text-xs text-primary">{profileMessage}</p> : null}
               </div>
             </div>
 
@@ -204,7 +318,7 @@ function SettingsView() {
                       className="h-2 w-full cursor-pointer appearance-none rounded-full bg-surface-container-lowest accent-secondary"
                       max="7"
                       min="1"
-                      onChange={(event) => setAlertThreshold(Number(event.target.value))}
+                      onChange={(event) => handleAlertThresholdChange(Number(event.target.value))}
                       type="range"
                       value={alertThreshold}
                     />
@@ -215,7 +329,7 @@ function SettingsView() {
                     </div>
                   </div>
 
-                  <button className="flex w-full items-center justify-between rounded-2xl bg-surface-container-lowest p-4 text-left" onClick={() => setPushEnabled((value) => !value)} type="button">
+                  <button className="flex w-full items-center justify-between rounded-2xl bg-surface-container-lowest p-4 text-left" onClick={togglePushNotifications} type="button">
                     <div className="flex flex-col">
                       <span className="text-sm font-bold">Push Notifications</span>
                       <span className="text-[10px] text-on-surface-variant">Mobile and Email</span>
@@ -243,6 +357,8 @@ function SettingsView() {
                   <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Saved</span>
                 </div>
 
+                {preferencesMessage ? <p className="mb-4 text-xs text-primary">{preferencesMessage}</p> : null}
+
                 <div className="space-y-4">
                   <button className="group flex w-full cursor-pointer items-center justify-between" type="button">
                     <span className="flex items-center gap-4">
@@ -251,12 +367,12 @@ function SettingsView() {
                     </span>
 
                     <span className="flex items-center gap-2">
-                      <span className="text-xs font-bold text-primary">English (US)</span>
+                      <span className="text-xs font-bold text-primary">{language}</span>
                       <span className="material-symbols-outlined text-sm text-on-surface-variant">expand_more</span>
                     </span>
                   </button>
 
-                  <button className="group flex w-full cursor-pointer items-center justify-between" onClick={() => setDarkModeEnabled((value) => !value)} type="button">
+                  <button className="group flex w-full cursor-pointer items-center justify-between" onClick={toggleDarkMode} type="button">
                     <span className="flex items-center gap-4">
                       <span className="material-symbols-outlined text-on-surface-variant">dark_mode</span>
                       <span className="text-sm font-medium">Dark Mode</span>

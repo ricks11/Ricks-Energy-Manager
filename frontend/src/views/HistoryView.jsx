@@ -1,49 +1,125 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { getHistory } from "../api/client";
 
-const logs = [
-  {
-    date: "Oct 24, 2023",
-    time: "08:42 PM",
-    event: "Grid Consumption",
-    dotClass: "bg-on-surface/40",
-    energy: "4.2 kWh",
-    energyClass: "font-medium text-on-surface",
-    financial: "-",
-    financialClass: "text-on-surface-variant/40",
-  },
-  {
-    date: "Oct 24, 2023",
-    time: "02:15 PM",
-    event: "Solar Top-up",
-    dotClass: "bg-primary",
-    energy: "+12.0 kWh",
-    energyClass: "font-bold text-primary",
-    financial: "-",
-    financialClass: "text-on-surface-variant/40",
-  },
-  {
-    date: "Oct 23, 2023",
-    time: "11:30 PM",
-    event: "Grid Consumption",
-    dotClass: "bg-on-surface/40",
-    energy: "1.8 kWh",
-    energyClass: "font-medium text-on-surface",
-    financial: "-",
-    financialClass: "text-on-surface-variant/40",
-  },
-  {
-    date: "Oct 23, 2023",
-    time: "07:05 PM",
-    event: "Manual Wallet Load",
-    dotClass: "bg-secondary",
-    energy: "-",
-    energyClass: "text-on-surface-variant/40",
-    financial: "$50.00",
-    financialClass: "font-bold text-secondary",
-  },
+const defaultChart = [
+  { label: "Mon", kwh: 12.4 },
+  { label: "Tue", kwh: 14.1 },
+  { label: "Wed", kwh: 16.3 },
+  { label: "Thu", kwh: 18.2 },
+  { label: "Fri", kwh: 20.5 },
+  { label: "Sat", kwh: 22.8 },
+  { label: "Sun", kwh: 21.5 },
 ];
 
+function formatDateTime(value) {
+  const date = new Date(value);
+  return {
+    date: date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+    }),
+    time: date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }),
+  };
+}
+
+function resolveLogStyles(eventType) {
+  if (["solar_top_up", "top_up_purchase"].includes(eventType)) {
+    return {
+      dotClass: "bg-primary",
+      energyClass: "font-bold text-primary",
+      financialClass: "text-primary",
+    };
+  }
+
+  if (eventType === "manual_wallet_load") {
+    return {
+      dotClass: "bg-secondary",
+      energyClass: "text-on-surface-variant/40",
+      financialClass: "font-bold text-secondary",
+    };
+  }
+
+  return {
+    dotClass: "bg-on-surface/40",
+    energyClass: "font-medium text-on-surface",
+    financialClass: "text-on-surface-variant/40",
+  };
+}
+
+function formatEnergy(log) {
+  if (log.energy_kwh === null) {
+    return "-";
+  }
+
+  const formatted = `${Math.abs(log.energy_kwh).toFixed(1)} kWh`;
+  return ["solar_top_up", "top_up_purchase"].includes(log.event_type) ? `+${formatted}` : formatted;
+}
+
+function formatFinancial(log) {
+  if (log.amount_eur === null) {
+    return "-";
+  }
+
+  return `EUR ${log.amount_eur.toFixed(2)}`;
+}
+
 function HistoryView() {
+  const [historyData, setHistoryData] = useState({
+    current_period_kwh: 142.8,
+    percent_change: 12,
+    chart: defaultChart,
+    logs: [],
+  });
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadHistory() {
+      try {
+        const payload = await getHistory(30);
+
+        if (!isCancelled) {
+          setHistoryData({
+            current_period_kwh: payload.current_period_kwh,
+            percent_change: payload.percent_change,
+            chart: payload.chart.length > 0 ? payload.chart : defaultChart,
+            logs: payload.logs,
+          });
+          setLoadError("");
+        }
+      } catch {
+        if (!isCancelled) {
+          setLoadError("Falha ao sincronizar historico com a API. Exibindo visual local.");
+        }
+      }
+    }
+
+    loadHistory();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  const chartLabels = useMemo(() => historyData.chart.map((point) => point.label), [historyData.chart]);
+  const chartTooltipValues = useMemo(() => {
+    const first = historyData.chart[1]?.kwh ?? 12.4;
+    const middle = historyData.chart[Math.floor(historyData.chart.length / 2)]?.kwh ?? 22.0;
+    const last = historyData.chart[historyData.chart.length - 1]?.kwh ?? 28.0;
+
+    return {
+      first: first.toFixed(1),
+      middle: middle.toFixed(1),
+      last: last.toFixed(1),
+    };
+  }, [historyData.chart]);
+
   return (
     <div className="min-h-screen bg-surface font-body text-on-surface antialiased">
       <header className="fixed top-0 z-50 flex h-16 w-full items-center justify-between bg-[#060e20]/60 px-6 shadow-[0_20px_40px_rgba(0,0,0,0.1)] backdrop-blur-3xl">
@@ -61,6 +137,9 @@ function HistoryView() {
             </Link>
             <Link className="rounded-lg px-3 py-1 text-[#dee5ff]/70 transition-colors hover:bg-[#192540]" to="/top-up">
               Top-up
+            </Link>
+            <Link className="rounded-lg px-3 py-1 text-[#dee5ff]/70 transition-colors hover:bg-[#192540]" to="/settings">
+              Settings
             </Link>
           </nav>
         </div>
@@ -130,6 +209,7 @@ function HistoryView() {
             <div>
               <h1 className="font-headline text-4xl font-extrabold tracking-tight text-on-surface">Consumption History</h1>
               <p className="mt-1 text-on-surface-variant">Detailed analysis of your energy expenditure.</p>
+              {loadError ? <p className="mt-2 text-xs text-tertiary">{loadError}</p> : null}
             </div>
 
             <div className="flex gap-1 rounded-xl bg-surface-container-low p-1.5">
@@ -145,7 +225,7 @@ function HistoryView() {
               <div>
                 <span className="text-xs font-label uppercase tracking-widest text-on-surface-variant">Current Period</span>
                 <div className="mt-1 flex items-baseline gap-2">
-                  <span className="font-headline text-5xl font-extrabold text-on-surface">142.8</span>
+                  <span className="font-headline text-5xl font-extrabold text-on-surface">{historyData.current_period_kwh.toFixed(1)}</span>
                   <span className="font-headline text-xl font-bold text-primary">kWh</span>
                 </div>
               </div>
@@ -153,7 +233,7 @@ function HistoryView() {
               <div className="text-right">
                 <span className="flex items-center gap-1 font-bold text-primary">
                   <span className="material-symbols-outlined text-sm">trending_up</span>
-                  12%
+                  {historyData.percent_change.toFixed(1)}%
                 </span>
                 <p className="mt-1 text-xs text-on-surface-variant">vs last week</p>
               </div>
@@ -192,8 +272,18 @@ function HistoryView() {
                     <circle className="transition-all hover:r-8" cx="200" cy="170" fill="#69f6b8" r="6" />
                     <foreignObject className="opacity-0 transition-opacity group-hover/point:opacity-100" height="45" width="80" x="160" y="115">
                       <div className="rounded-lg border border-primary/20 bg-surface-bright p-2 text-center shadow-xl">
-                        <p className="text-[10px] uppercase text-on-surface-variant">Tue</p>
-                        <p className="text-xs font-bold text-primary">12.4 kWh</p>
+                        <p className="text-[10px] uppercase text-on-surface-variant">{chartLabels[1] ?? "Tue"}</p>
+                        <p className="text-xs font-bold text-primary">{chartTooltipValues.first} kWh</p>
+                      </div>
+                    </foreignObject>
+                  </g>
+
+                  <g className="group/point cursor-pointer">
+                    <circle className="animate-pulse" cx="500" cy="120" fill="#69f6b8" r="6" />
+                    <foreignObject className="opacity-0 transition-opacity group-hover/point:opacity-100" height="45" width="80" x="460" y="65">
+                      <div className="rounded-lg border border-primary/20 bg-surface-bright p-2 text-center shadow-xl">
+                        <p className="text-[10px] uppercase text-on-surface-variant">{chartLabels[Math.floor(chartLabels.length / 2)] ?? "Thu"}</p>
+                        <p className="text-xs font-bold text-primary">{chartTooltipValues.middle} kWh</p>
                       </div>
                     </foreignObject>
                   </g>
@@ -203,21 +293,17 @@ function HistoryView() {
                     <circle cx="800" cy="80" fill="transparent" r="12" />
                     <foreignObject className="opacity-0 transition-opacity group-hover/point:opacity-100" height="45" width="80" x="760" y="25">
                       <div className="rounded-lg border border-primary/20 bg-surface-bright p-2 text-center shadow-xl">
-                        <p className="text-[10px] uppercase text-on-surface-variant">Sat</p>
-                        <p className="text-xs font-bold text-primary">32.8 kWh</p>
+                        <p className="text-[10px] uppercase text-on-surface-variant">{chartLabels[chartLabels.length - 1] ?? "Sun"}</p>
+                        <p className="text-xs font-bold text-primary">{chartTooltipValues.last} kWh</p>
                       </div>
                     </foreignObject>
                   </g>
                 </svg>
 
                 <div className="mt-4 flex justify-between text-[10px] font-label uppercase tracking-tighter text-on-surface-variant opacity-60">
-                  <span>Mon</span>
-                  <span>Tue</span>
-                  <span>Wed</span>
-                  <span>Thu</span>
-                  <span>Fri</span>
-                  <span>Sat</span>
-                  <span>Sun</span>
+                  {chartLabels.map((label, index) => (
+                    <span key={`${label}-${index}`}>{label}</span>
+                  ))}
                 </div>
               </div>
             </div>
@@ -269,26 +355,39 @@ function HistoryView() {
                   </thead>
 
                   <tbody className="divide-y divide-outline-variant/5">
-                    {logs.map((row) => (
-                      <tr className="group transition-colors hover:bg-surface-variant/30" key={`${row.date}-${row.time}-${row.event}`}>
-                        <td className="px-8 py-5">
-                          <div className="flex flex-col">
-                            <span className="font-medium text-on-surface">{row.date}</span>
-                            <span className="text-xs text-on-surface-variant">{row.time}</span>
-                          </div>
-                        </td>
+                    {historyData.logs.length > 0 ? (
+                      historyData.logs.map((log) => {
+                        const dateTime = formatDateTime(log.occurred_at);
+                        const styles = resolveLogStyles(log.event_type);
 
-                        <td className="px-8 py-5">
-                          <div className="flex items-center gap-2">
-                            <span className={`h-2 w-2 rounded-full ${row.dotClass}`} />
-                            <span className="text-sm">{row.event}</span>
-                          </div>
-                        </td>
+                        return (
+                          <tr className="group transition-colors hover:bg-surface-variant/30" key={log.id}>
+                            <td className="px-8 py-5">
+                              <div className="flex flex-col">
+                                <span className="font-medium text-on-surface">{dateTime.date}</span>
+                                <span className="text-xs text-on-surface-variant">{dateTime.time}</span>
+                              </div>
+                            </td>
 
-                        <td className={`px-8 py-5 text-right ${row.energyClass}`}>{row.energy}</td>
-                        <td className={`px-8 py-5 text-right ${row.financialClass}`}>{row.financial}</td>
+                            <td className="px-8 py-5">
+                              <div className="flex items-center gap-2">
+                                <span className={`h-2 w-2 rounded-full ${styles.dotClass}`} />
+                                <span className="text-sm">{log.event_label}</span>
+                              </div>
+                            </td>
+
+                            <td className={`px-8 py-5 text-right ${styles.energyClass}`}>{formatEnergy(log)}</td>
+                            <td className={`px-8 py-5 text-right ${styles.financialClass}`}>{formatFinancial(log)}</td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      <tr>
+                        <td className="px-8 py-5 text-sm text-on-surface-variant" colSpan={4}>
+                          No events found yet.
+                        </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
               </div>

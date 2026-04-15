@@ -1,12 +1,78 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { getEnergySummary } from "../api/client";
 
 function DashboardView() {
+  const [summary, setSummary] = useState({
+    balanceKwh: 1240,
+    estimatedDays: 12,
+    averageDailyConsumption: 103.3,
+    meterId: "4829-X",
+    serviceStatus: "ok",
+    lastUpdated: null,
+  });
+  const [summaryError, setSummaryError] = useState("");
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    async function loadSummary() {
+      try {
+        const payload = await getEnergySummary();
+
+        if (!isCancelled) {
+          setSummary({
+            balanceKwh: payload.balance_kwh,
+            estimatedDays: payload.estimated_days_remaining,
+            averageDailyConsumption: payload.average_daily_consumption,
+            meterId: payload.meter_id,
+            serviceStatus: payload.service_status,
+            lastUpdated: payload.last_updated,
+          });
+          setSummaryError("");
+        }
+      } catch {
+        if (!isCancelled) {
+          setSummaryError("Sem ligacao com a API. Exibindo dados locais.");
+        }
+      }
+    }
+
+    loadSummary();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, []);
+
+  const formattedBalance = useMemo(
+    () =>
+      new Intl.NumberFormat("en-US", {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2,
+      }).format(summary.balanceKwh),
+    [summary.balanceKwh]
+  );
+
+  const formattedUpdatedAt = useMemo(() => {
+    if (!summary.lastUpdated) {
+      return "A sincronizar...";
+    }
+
+    return new Date(summary.lastUpdated).toLocaleString("pt-PT", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  }, [summary.lastUpdated]);
+
   return (
     <div className="flex min-h-screen overflow-hidden bg-surface text-on-background">
       <aside className="hidden h-screen w-72 shrink-0 flex-col border-r border-outline-variant/10 bg-[#091328] px-4 py-8 md:flex">
         <div className="mb-12 px-2">
           <span className="text-2xl font-black tracking-tight text-[#69f6b8]">Ricks Energy Manager</span>
-          <p className="mt-1 text-xs font-label uppercase tracking-wide text-on-surface-variant">Meter ID: 4829-X</p>
+          <p className="mt-1 text-xs font-label uppercase tracking-wide text-on-surface-variant">Meter ID: {summary.meterId}</p>
         </div>
 
         <nav className="flex-1 space-y-2">
@@ -55,7 +121,7 @@ function DashboardView() {
 
             <div className="flex flex-col">
               <h1 className="hidden text-lg font-bold font-headline text-[#dee5ff] md:block">Dashboard Energy</h1>
-              <p className="hidden text-[10px] font-medium leading-none text-on-surface-variant md:block">Ultima atualizacao: ha 5 min</p>
+              <p className="hidden text-[10px] font-medium leading-none text-on-surface-variant md:block">Ultima atualizacao: {formattedUpdatedAt}</p>
             </div>
           </div>
 
@@ -84,7 +150,7 @@ function DashboardView() {
                   <span className="text-xs font-semibold uppercase tracking-[0.1em] text-on-surface-variant font-label">Saldo Atual</span>
 
                   <div className="flex items-baseline gap-2">
-                    <span className="text-7xl font-extrabold tracking-tighter text-on-surface font-headline">1,240</span>
+                    <span className="text-7xl font-extrabold tracking-tighter text-on-surface font-headline">{formattedBalance}</span>
                     <span className="text-2xl font-medium text-primary font-headline">kWh</span>
                   </div>
 
@@ -92,8 +158,10 @@ function DashboardView() {
                     <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: '"FILL" 1' }}>
                       electric_bolt
                     </span>
-                    <span className="text-sm font-bold font-body">Sistema Ativo</span>
+                    <span className="text-sm font-bold font-body">{summary.serviceStatus === "ok" ? "Sistema Ativo" : "Sistema Offline"}</span>
                   </div>
+
+                  {summaryError ? <p className="text-xs text-tertiary">{summaryError}</p> : null}
                 </div>
 
                 <div className="flex flex-col items-center space-y-4 rounded-xl border border-outline-variant/10 bg-surface-container-low/50 p-6 text-center backdrop-blur-md">
@@ -116,12 +184,12 @@ function DashboardView() {
                     </svg>
 
                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-3xl font-black text-on-surface font-headline">12</span>
+                      <span className="text-3xl font-black text-on-surface font-headline">{summary.estimatedDays}</span>
                       <span className="text-[10px] uppercase text-on-surface-variant font-label">Dias</span>
                     </div>
                   </div>
 
-                  <p className="text-sm text-on-surface-variant">Consumo medio regular</p>
+                  <p className="text-sm text-on-surface-variant">Consumo medio: {summary.averageDailyConsumption.toFixed(1)} kWh/dia</p>
                 </div>
               </div>
             </div>

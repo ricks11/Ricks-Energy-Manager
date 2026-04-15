@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { createTopUp } from "../api/client";
 
 const RATE = 0.25;
 
@@ -19,6 +20,10 @@ function TopUpView() {
   const [kwh, setKwh] = useState(100);
   const [selectedBundle, setSelectedBundle] = useState("standard");
   const [selectedMethod, setSelectedMethod] = useState("credit-card");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const [newBalanceKwh, setNewBalanceKwh] = useState(null);
+  const [serverEstimatedDays, setServerEstimatedDays] = useState(null);
 
   const total = useMemo(() => kwh * RATE, [kwh]);
   const estimatedDays = useMemo(() => Math.max(0, Math.round(kwh / 7)), [kwh]);
@@ -32,6 +37,32 @@ function TopUpView() {
     const nextValue = Number.parseFloat(event.target.value);
     setSelectedBundle(null);
     setKwh(Number.isFinite(nextValue) && nextValue >= 0 ? nextValue : 0);
+  }
+
+  async function handleConfirmPurchase() {
+    if (kwh <= 0 || isSubmitting) {
+      return;
+    }
+
+    const selectedPaymentMethod = paymentMethods.find((method) => method.id === selectedMethod)?.label ?? "Credit Card";
+
+    setIsSubmitting(true);
+    setFeedback("");
+
+    try {
+      const payload = await createTopUp({
+        kwh,
+        payment_method: selectedPaymentMethod,
+      });
+
+      setNewBalanceKwh(payload.new_balance_kwh);
+      setServerEstimatedDays(payload.estimated_extension_days);
+      setFeedback(`Top-up confirmado. Novo saldo: ${payload.new_balance_kwh.toFixed(2)} kWh.`);
+    } catch (error) {
+      setFeedback(error instanceof Error ? error.message : "Nao foi possivel concluir a compra.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -210,15 +241,29 @@ function TopUpView() {
                   <span className="text-glow font-headline text-5xl font-black text-primary">EUR {total.toFixed(2)}</span>
                 </div>
 
-                <button className="kinetic-gradient flex h-14 w-full items-center justify-center gap-3 rounded-2xl font-headline text-lg font-bold text-on-primary shadow-[0_10px_30px_rgba(105,246,184,0.3)] transition-all hover:scale-[1.02] active:scale-95" type="button">
-                  <span className="material-symbols-outlined hidden animate-spin">sync</span>
-                  <span>Confirm Purchase</span>
+                {newBalanceKwh !== null ? (
+                  <div className="mb-4 flex items-center justify-between rounded-2xl border border-primary/20 bg-primary/5 px-4 py-3 text-sm">
+                    <span className="text-on-surface-variant">Updated Balance</span>
+                    <span className="font-bold text-primary">{newBalanceKwh.toFixed(2)} kWh</span>
+                  </div>
+                ) : null}
+
+                <button
+                  className="kinetic-gradient flex h-14 w-full items-center justify-center gap-3 rounded-2xl font-headline text-lg font-bold text-on-primary shadow-[0_10px_30px_rgba(105,246,184,0.3)] transition-all hover:scale-[1.02] active:scale-95 disabled:cursor-not-allowed disabled:opacity-70"
+                  disabled={isSubmitting}
+                  onClick={handleConfirmPurchase}
+                  type="button"
+                >
+                  <span className={`material-symbols-outlined animate-spin ${isSubmitting ? "" : "hidden"}`}>sync</span>
+                  <span>{isSubmitting ? "Processing..." : "Confirm Purchase"}</span>
                 </button>
 
                 <div className="mt-6 flex items-center justify-center gap-2 text-xs text-on-surface-variant/60">
                   <span className="material-symbols-outlined text-sm">lock</span>
                   Secure encrypted transaction
                 </div>
+
+                {feedback ? <p className="mt-4 text-center text-xs text-primary">{feedback}</p> : null}
               </div>
             </div>
 
@@ -229,7 +274,7 @@ function TopUpView() {
                 </div>
 
                 <p className="text-[11px] leading-relaxed text-on-surface-variant">
-                  This recharge will extend your estimated energy availability by <span className="font-bold text-secondary">{estimatedDays} days</span> based on your last 30-day
+                  This recharge will extend your estimated energy availability by <span className="font-bold text-secondary">{serverEstimatedDays ?? estimatedDays} days</span> based on your last 30-day
                   usage average.
                 </p>
               </div>
