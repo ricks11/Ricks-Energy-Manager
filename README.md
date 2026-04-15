@@ -51,6 +51,7 @@ python -m venv .venv
 pip install -r requirements.txt
 Copy-Item .env.example .env
 cd ..
+python -m backend.bootstrap_db
 ```
 
 Executar API (a partir da raiz do projeto):
@@ -77,6 +78,8 @@ APP_NAME=Ricks Energy Manager API
 APP_VERSION=0.1.0
 DEBUG_MODE=True
 DATABASE_URL=sqlite:///./ricks_energy.db
+DATABASE_AUTO_CREATE=False
+DATABASE_AUTO_SEED=False
 FRONTEND_ORIGIN=http://localhost:5173
 ```
 
@@ -86,6 +89,8 @@ Para ambiente MySQL hospedado (ex.: Hostinger), use o template [backend/.env.tem
 cd backend
 Copy-Item .env.template .env
 ```
+
+Mantenha `DATABASE_AUTO_CREATE=False` e `DATABASE_AUTO_SEED=False` para ambiente de producao.
 
 Frontend ([frontend/.env.example](frontend/.env.example)):
 

@@ -1,6 +1,7 @@
 import csv
 from datetime import date, datetime, time, timedelta, timezone
 from io import StringIO
+from typing import TypeVar
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Response, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,6 +25,9 @@ from backend.schemas import (
     TopUpOut,
     TopUpRequest,
 )
+
+
+TModel = TypeVar("TModel")
 
 
 settings = get_settings()
@@ -52,9 +56,10 @@ app.add_middleware(
 def seed_initial_data() -> None:
     db = SessionLocal()
     try:
-        if db.query(UserProfile).first() is None:
+        if db.get(UserProfile, 1) is None:
             db.add(
                 UserProfile(
+                    id=1,
                     full_name="Alexander Thorne",
                     email="a.thorne@kinetic.io",
                     phone="+1 (555) 0482-990",
@@ -72,9 +77,10 @@ def seed_initial_data() -> None:
                 )
             )
 
-        if db.query(UserPreference).first() is None:
+        if db.get(UserPreference, 1) is None:
             db.add(
                 UserPreference(
+                    id=1,
                     alert_threshold_days=2,
                     push_notifications=True,
                     dark_mode=True,
@@ -82,9 +88,10 @@ def seed_initial_data() -> None:
                 )
             )
 
-        if db.query(EnergyWallet).first() is None:
+        if db.get(EnergyWallet, 1) is None:
             db.add(
                 EnergyWallet(
+                    id=1,
                     balance_kwh=1240.0,
                     average_daily_consumption=103.3,
                 )
@@ -143,25 +150,30 @@ def seed_initial_data() -> None:
         db.close()
 
 
+def require_singleton_record(db: Session, model: type[TModel], record_name: str) -> TModel:
+    records = db.query(model).order_by(model.id.asc()).limit(2).all()
+    if not records:
+        raise HTTPException(status_code=500, detail=f"{record_name} record not initialized")
+
+    if len(records) > 1:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Multiple {record_name} records found. Expected exactly one.",
+        )
+
+    return records[0]
+
+
 def require_profile(db: Session) -> UserProfile:
-    profile = db.query(UserProfile).first()
-    if profile is None:
-        raise HTTPException(status_code=500, detail="Profile record not initialized")
-    return profile
+    return require_singleton_record(db, UserProfile, "Profile")
 
 
 def require_preferences(db: Session) -> UserPreference:
-    preferences = db.query(UserPreference).first()
-    if preferences is None:
-        raise HTTPException(status_code=500, detail="Preferences record not initialized")
-    return preferences
+    return require_singleton_record(db, UserPreference, "Preferences")
 
 
 def require_wallet(db: Session) -> EnergyWallet:
-    wallet = db.query(EnergyWallet).first()
-    if wallet is None:
-        raise HTTPException(status_code=500, detail="Energy wallet record not initialized")
-    return wallet
+    return require_singleton_record(db, EnergyWallet, "Energy wallet")
 
 
 def format_event_label(event_type: str) -> str:
@@ -170,8 +182,11 @@ def format_event_label(event_type: str) -> str:
 
 @app.on_event("startup")
 def on_startup() -> None:
-    Base.metadata.create_all(bind=engine)
-    seed_initial_data()
+    if settings.database_auto_create:
+        Base.metadata.create_all(bind=engine)
+
+    if settings.database_auto_seed:
+        seed_initial_data()
 
 
 @app.get("/", tags=["system"])
